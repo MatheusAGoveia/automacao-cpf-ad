@@ -1,0 +1,152 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Usuários · Active Directory" Width="1280" Height="900" MinWidth="1080" MinHeight="620"
+        WindowStartupLocation="CenterScreen" Background="#F3F5F9" FontFamily="Segoe UI" FontSize="13"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+  <Window.Resources>
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="White"/><Setter Property="Foreground" Value="#27364C"/>
+      <Setter Property="BorderBrush" Value="#D6DDE8"/><Setter Property="Padding" Value="17,9"/>
+      <Setter Property="Cursor" Value="Hand"/><Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+        <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
+          <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Opacity" Value="0.82"/></Trigger>
+          <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Surface" Property="Opacity" Value="0.4"/><Setter Property="Cursor" Value="Arrow"/></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style TargetType="TextBox"><Setter Property="Padding" Value="9,7"/><Setter Property="BorderBrush" Value="#D6DDE8"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
+    <Style TargetType="ComboBox"><Setter Property="Padding" Value="9,7"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
+    <Style TargetType="DataGridColumnHeader"><Setter Property="Background" Value="#F3F6FA"/><Setter Property="Foreground" Value="#536176"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Padding" Value="11,10"/><Setter Property="BorderThickness" Value="0,0,0,1"/><Setter Property="BorderBrush" Value="#E2E8F0"/></Style>
+    <Style TargetType="DataGridCell"><Setter Property="Padding" Value="10,8"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="DataGridCell"><Border Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}"><ContentPresenter VerticalAlignment="Center"/></Border></ControlTemplate></Setter.Value></Setter></Style>
+    <Style x:Key="Caption" TargetType="TextBlock"><Setter Property="Foreground" Value="#64748B"/><Setter Property="FontSize" Value="12"/><Setter Property="Margin" Value="0,0,0,5"/></Style>
+  </Window.Resources>
+  <Grid Background="#F3F5F9">
+    <Grid.RowDefinitions><RowDefinition Height="76"/><RowDefinition Height="*"/><RowDefinition Height="32"/></Grid.RowDefinitions>
+    <Border Background="#142A46" Padding="24,12">
+      <DockPanel>
+        <Border DockPanel.Dock="Right" Background="#253E5B" CornerRadius="5" Padding="12,8" VerticalAlignment="Center">
+          <TextBlock x:Name="SessionLabel" Foreground="#DAE6F4" FontSize="12"/>
+        </Border>
+        <StackPanel><TextBlock Text="USUÁRIOS / ACTIVE DIRECTORY" FontSize="12" FontWeight="SemiBold" Foreground="#82B6FF"/><TextBlock Text="Conferência de usuários" FontSize="26" FontWeight="SemiBold" Foreground="White" Margin="0,3,0,0"/></StackPanel>
+      </DockPanel>
+    </Border>
+    <Grid Grid.Row="1" Margin="20,12,20,10">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <ScrollViewer x:Name="SetupScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="340">
+      <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <Border Background="White" BorderBrush="#E0E6EF" BorderThickness="1" CornerRadius="8" Padding="18,14">
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="162"/><ColumnDefinition Width="14"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <StackPanel><TextBlock Text="1. Arquivo de usuários" Style="{StaticResource Caption}"/><TextBox x:Name="CsvPath" IsReadOnly="True" Text="Selecione o CSV baixado da planilha" Foreground="#64748B"/></StackPanel>
+          <StackPanel Grid.Column="2"><TextBlock Text="Codificação" Style="{StaticResource Caption}"/><ComboBox x:Name="EncodingBox"><ComboBoxItem Content="UTF-8" Tag="utf-8"/><ComboBoxItem Content="Windows-1252" Tag="windows-1252"/></ComboBox></StackPanel>
+          <Button Grid.Column="4" x:Name="BrowseButton" Content="Selecionar CSV" VerticalAlignment="Bottom" Height="35"/>
+          <StackPanel Grid.Row="1" Grid.ColumnSpan="5" Margin="0,12,0,0">
+            <CheckBox x:Name="DisableUsersBox" Content="Permitir desativação de usuários" IsChecked="False" Foreground="#27364C" FontWeight="SemiBold" ToolTip="Habilite antes de simular. Cada nova abertura inicia com esta opção desligada."/>
+            <TextBlock Text="NOVO LOGIN = desativar: usa somente o DOMÍNIO da linha, mesmo sem CONCLUÍDO ou CPF." Foreground="#64748B" FontSize="11" TextWrapping="Wrap" Margin="21,4,0,0"/>
+          </StackPanel>
+        </Grid>
+      </Border>
+      <Border Grid.Row="1" Background="White" BorderBrush="#E0E6EF" BorderThickness="1" CornerRadius="8" Padding="18,12" Margin="0,10,0,0">
+        <Expander x:Name="ConfigExpander" IsExpanded="False">
+          <Expander.Header><TextBlock Text="2. Domínios · descoberta automática" FontWeight="SemiBold" Foreground="#27364C"/></Expander.Header>
+          <Grid Margin="0,12,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="22"/><ColumnDefinition Width="270"/></Grid.ColumnDefinitions>
+            <StackPanel>
+              <DataGrid x:Name="DomainsGrid" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EDF1F6" BorderBrush="#E0E6EF" RowHeaderWidth="0" MinHeight="92" MaxHeight="145" SelectionMode="Single">
+                <DataGrid.Columns><DataGridTextColumn Header="Domínio da planilha" Binding="{Binding Dominio}" IsReadOnly="True" Width="155"/><DataGridTextColumn Header="Servidor manual (opcional)" Binding="{Binding Servidor, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="170"/><DataGridTextColumn Header="Controlador localizado" Binding="{Binding Descoberto}" IsReadOnly="True" Width="*" MinWidth="170"/></DataGrid.Columns>
+              </DataGrid>
+              <TextBlock Text="Servidor em branco = descoberta automática. Cada usuário segue o DOMÍNIO informado no CSV." Foreground="#64748B" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+              <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="82"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <StackPanel><TextBlock Text="Atributo" Style="{StaticResource Caption}"/><TextBox x:Name="AttributeBox" Text="CPF"/></StackPanel>
+                <StackPanel Grid.Column="2"><TextBlock Text="Gravação no AD" Style="{StaticResource Caption}"/><TextBox Text="11 dígitos, sem pontuação" IsReadOnly="True" Background="#F3F6FA" FontSize="11"/></StackPanel>
+              </Grid>
+              <Button x:Name="SaveConfigButton" Content="Salvar configuração" Margin="0,10,0,0"/>
+            </StackPanel>
+          </Grid>
+        </Expander>
+      </Border>
+      <UniformGrid x:Name="SummaryCards" Grid.Row="2" Columns="4" Margin="0,10,0,0">
+        <Border Background="White" CornerRadius="7" Padding="15,10" Margin="0,0,9,0"><StackPanel><TextBlock Text="USUÁRIOS NO CSV" FontSize="10" Foreground="#64748B" FontWeight="SemiBold"/><TextBlock x:Name="TotalCount" Text="0" FontSize="27" FontWeight="SemiBold" Foreground="#20344F"/></StackPanel></Border>
+        <Border Background="#EAF2FF" CornerRadius="7" Padding="15,10" Margin="0,0,9,0"><StackPanel><TextBlock Text="PRONTOS PARA APLICAR" FontSize="10" Foreground="#3768AA" FontWeight="SemiBold"/><TextBlock x:Name="PendingCount" Text="—" FontSize="27" FontWeight="SemiBold" Foreground="#205FC3"/></StackPanel></Border>
+        <Border Background="#EAF6F0" CornerRadius="7" Padding="15,10" Margin="0,0,9,0"><StackPanel><TextBlock Text="CONFERIDOS / APLICADOS" FontSize="10" Foreground="#327457" FontWeight="SemiBold"/><TextBlock x:Name="OkCount" Text="—" FontSize="27" FontWeight="SemiBold" Foreground="#23754F"/></StackPanel></Border>
+        <Border Background="#FFF4E5" CornerRadius="7" Padding="15,10"><StackPanel><TextBlock Text="PARA REVISAR" FontSize="10" Foreground="#916322" FontWeight="SemiBold"/><TextBlock x:Name="ReviewCount" Text="—" FontSize="27" FontWeight="SemiBold" Foreground="#A76B12"/></StackPanel></Border>
+      </UniformGrid>
+      </Grid>
+      </ScrollViewer>
+      <Grid Grid.Row="1" Margin="0,12,0,10">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <StackPanel VerticalAlignment="Center"><TextBlock Text="3. Confira e aplique" FontSize="17" FontWeight="SemiBold" Foreground="#27364C"/><TextBlock Text="Ordene clicando nas colunas. O filtro altera somente a visualização." FontSize="12" Foreground="#64748B" Margin="0,3,0,0"/></StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="OpenReportButton" Content="Abrir relatório" IsEnabled="False" Margin="0,0,8,0"/>
+          <Button x:Name="SimulateButton" Content="Simular no AD" IsEnabled="False" Background="#2363CA" Foreground="White" BorderBrush="#2363CA" Margin="0,0,8,0"/>
+          <Button x:Name="ApplyButton" Content="Aplicar todos (0)" IsEnabled="False" Background="#18734C" Foreground="White" BorderBrush="#18734C"/>
+        </StackPanel>
+      </Grid>
+      <Border Grid.Row="2" Background="White" BorderBrush="#E0E6EF" BorderThickness="1" CornerRadius="7" ClipToBounds="True">
+        <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="48"/></Grid.RowDefinitions>
+          <StackPanel>
+          <Grid Margin="12,8,12,8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="154"/><ColumnDefinition Width="12"/><ColumnDefinition Width="160"/><ColumnDefinition Width="12"/><ColumnDefinition Width="140"/><ColumnDefinition Width="8"/><ColumnDefinition Width="52"/><ColumnDefinition Width="8"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+            <StackPanel><TextBlock Text="Buscar nome, login ou CPF" Style="{StaticResource Caption}"/><TextBox x:Name="SearchBox" ToolTip="Busca também sem acentos e sem pontuação do CPF"/></StackPanel>
+            <StackPanel Grid.Column="2"><TextBlock Text="Domínio" Style="{StaticResource Caption}"/><ComboBox x:Name="DomainFilter" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="Todos os domínios remove apenas o filtro de domínio. Use Limpar para remover também Busca e Situação."/></StackPanel>
+            <StackPanel Grid.Column="4"><TextBlock Text="Situação" Style="{StaticResource Caption}"/><ComboBox x:Name="StatusFilter"><ComboBoxItem Content="Todas as situações" Tag="Todos"/><ComboBoxItem Content="Prontos para aplicar" Tag="Prontos"/><ComboBoxItem Content="Conferidos / aplicados" Tag="Conferidos"/><ComboBoxItem Content="Para revisar" Tag="Revisar"/><ComboBoxItem Content="Ignorados" Tag="Ignorados"/></ComboBox></StackPanel>
+            <StackPanel Grid.Column="6"><TextBlock Text="Ordenar por" Style="{StaticResource Caption}"/><ComboBox x:Name="SortBox"><ComboBoxItem Content="Nome completo" Tag="Nome"/><ComboBoxItem Content="Login" Tag="Login"/><ComboBoxItem Content="Domínio" Tag="Dominio"/><ComboBoxItem Content="CPF no CSV" Tag="CpfPlanilha"/><ComboBoxItem Content="CPF no AD" Tag="CpfAnterior"/><ComboBoxItem Content="Situação" Tag="Situacao"/><ComboBoxItem Content="Ação" Tag="AcaoTexto"/><ComboBoxItem Content="Login encontrado" Tag="LoginEncontrado"/></ComboBox></StackPanel>
+            <Button Grid.Column="8" x:Name="SortDirectionButton" Content="A–Z" Padding="5,7" VerticalAlignment="Bottom" ToolTip="Inverter ordem crescente / decrescente"/>
+            <Button Grid.Column="10" x:Name="ClearFiltersButton" Content="Limpar" Padding="9,7" VerticalAlignment="Bottom"/>
+          </Grid>
+          <Border x:Name="StaleResultsBanner" Visibility="Collapsed" Background="#FFF4E5" Padding="12,6" BorderBrush="#F2D8AD" BorderThickness="0,1,0,1">
+            <TextBlock x:Name="StaleResultsText" Foreground="#8D5C15" FontSize="12" TextWrapping="Wrap"/>
+          </Border>
+          </StackPanel>
+          <Grid Grid.Row="1">
+          <DataGrid x:Name="ResultsGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EDF1F6" BorderThickness="0,1,0,0" BorderBrush="#E0E6EF" Background="White" SelectionMode="Single" SelectionUnit="FullRow" RowHeaderWidth="0" EnableRowVirtualization="True" AlternatingRowBackground="#FAFBFD" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Nome completo" Binding="{Binding Nome}" SortMemberPath="Nome" Width="2*" MinWidth="170"/>
+              <DataGridTextColumn Header="Novo login / ação" Binding="{Binding Login}" SortMemberPath="Login" Width="1.1*" MinWidth="125"/>
+              <DataGridTextColumn Header="Domínio" Binding="{Binding Dominio}" SortMemberPath="Dominio" Width="*" MinWidth="100"/>
+              <DataGridTextColumn Header="Ação prevista" Binding="{Binding AcaoTexto}" SortMemberPath="AcaoTexto" Width="120"/>
+              <DataGridTextColumn Header="Login encontrado" Binding="{Binding LoginEncontrado}" SortMemberPath="LoginEncontrado" Width="130">
+                <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="ToolTip" Value="{Binding LoginEncontrado}"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/></Style></DataGridTextColumn.ElementStyle>
+              </DataGridTextColumn>
+              <DataGridTextColumn Header="Situação" Binding="{Binding Situacao}" SortMemberPath="Situacao" Width="185">
+                <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Foreground" Value="#64748B"/><Setter Property="FontWeight" Value="SemiBold"/>
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Status}" Value="SIMULADO_PREENCHER"><Setter Property="Foreground" Value="#2363CA"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Status}" Value="SIMULADO_DESATIVAR"><Setter Property="Foreground" Value="#2363CA"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Status}" Value="ATUALIZADO"><Setter Property="Foreground" Value="#18734C"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Status}" Value="CPF_JA_CONFERE"><Setter Property="Foreground" Value="#18734C"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Status}" Value="DESATIVADO"><Setter Property="Foreground" Value="#18734C"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Status}" Value="JA_DESATIVADO"><Setter Property="Foreground" Value="#18734C"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Revisar}" Value="True"><Setter Property="Foreground" Value="#A56913"/></DataTrigger>
+                  </Style.Triggers>
+                </Style></DataGridTextColumn.ElementStyle>
+              </DataGridTextColumn>
+              <DataGridTextColumn Header="CPF no CSV" Binding="{Binding CpfPlanilha}" SortMemberPath="CpfPlanilha" Width="142"/>
+              <DataGridTextColumn Header="CPF no AD" Binding="{Binding CpfAnterior}" SortMemberPath="CpfAnterior" Width="142"/>
+            </DataGrid.Columns>
+          </DataGrid>
+          <TextBlock x:Name="EmptyResultsText" Text="Selecione um CSV para visualizar os usuários." VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="#64748B" IsHitTestVisible="False" TextWrapping="Wrap" MaxWidth="620" Margin="20"/>
+          </Grid>
+          <Border Grid.Row="2" Background="#F8FAFD" BorderBrush="#E0E6EF" BorderThickness="0,1,0,0" Padding="13,7">
+            <DockPanel><TextBlock x:Name="VisibleCountText" Text="Exibindo 0 de 0" DockPanel.Dock="Right" Foreground="#64748B" FontSize="11" VerticalAlignment="Center" Margin="14,0,0,0"/>
+            <TextBlock x:Name="DetailsText" Text="Selecione uma linha para ver os detalhes. Comece escolhendo o arquivo CSV." TextWrapping="Wrap" Foreground="#536176" FontSize="12" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+          </Border>
+        </Grid>
+      </Border>
+    </Grid>
+    <Border Grid.Row="2" Background="White" BorderBrush="#E0E6EF" BorderThickness="0,1,0,0" Padding="24,8">
+      <DockPanel><ProgressBar x:Name="BusyBar" DockPanel.Dock="Right" Width="130" Height="5" IsIndeterminate="True" Visibility="Collapsed" Margin="14,0,0,0"/><TextBlock x:Name="StatusText" Text="Pronto para importar. Nenhuma consulta ao AD realizada." Foreground="#64748B" FontSize="12" TextTrimming="CharacterEllipsis"/></DockPanel>
+    </Border>
+  </Grid>
+</Window>

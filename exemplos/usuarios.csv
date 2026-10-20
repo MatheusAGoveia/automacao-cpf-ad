@@ -1,0 +1,4 @@
+NOME COMPLETO,DOMINIO,NOVO LOGIN,DATA MUDANÇA,Sistemas SAÚDE,Sistemas ADM,CPF,CONCLUÍDO
+Pessoa Exemplo A,BETIM.PMB,pessoa.exemplo.a,,,,000.000.001-91,TRUE
+Pessoa Exemplo B,SAÚDE.BETIM,pessoa.exemplo.b,,,,,TRUE
+Pessoa Exemplo C,BETIM.PMB,pessoa.exemplo.c,,,,000.000.002-72,FALSE

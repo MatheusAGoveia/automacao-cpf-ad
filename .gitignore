@@ -1,0 +1,4 @@
+relatorios/
+*.local.json
+*.csv
+!exemplos/*.csv
