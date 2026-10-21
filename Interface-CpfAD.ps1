@@ -14,7 +14,7 @@ $script:State = @{
     WorkerPath = (Join-Path $PSScriptRoot 'Executar-CpfAD.ps1')
     ConfigPath = (Join-Path $PSScriptRoot 'dominios.json')
     ResultView = $null; FilterUpdating = $false; FilterSearch = ''; FilterDomain = ''; FilterStatus = 'Todos'; SortDirection = 'Ascending'
-    ResultsStale = $false; SourceStamp = ''; LastInputCheckUtc = [DateTime]::MinValue; Preview = $true
+    ResultsStale = $false; SourceStamp = ''; LastInputCheckUtc = [DateTime]::MinValue; Preview = $true; Mode = 'Sincronizacao'
 }
 $script:StatusLabels = @{
     AGUARDANDO = 'Aguardando simulação'; SIMULADO_PREENCHER = 'Pronto para preencher'; ATUALIZADO = 'CPF atualizado'
@@ -29,15 +29,19 @@ $script:StatusLabels = @{
     SIMULADO_DESATIVAR = 'Pronto para desativar'; DESATIVADO = 'Conta desativada'; JA_DESATIVADO = 'Conta já desativada'
     DESATIVACAO_DESLIGADA = 'Desativação não habilitada'; DESATIVACAO_INICIADA = 'Desativação iniciada'
     DESATIVADO_SEM_CONFIRMACAO = 'Verificar desativação'; CONFLITO_ACOES = 'Ações em conflito'
+    JA_COM_NOVO_LOGIN = 'Já com novo login'; NOVO_LOGIN_PENDENTE = 'Novo login pendente'
+    SEM_NOVO_LOGIN = 'Sem novo login informado'; ACAO_NA_PLANILHA = 'Ação indicada na planilha'
+    CONSULTA_DESATUALIZADA = 'Verifique novamente'
 }
-$script:Ignored = @('NAO_CONCLUIDO', 'SEM_CPF_PLANILHA', 'ACAO_NAO_SUPORTADA', 'LINHA_REPETIDA', 'AGUARDANDO', 'DESATIVACAO_DESLIGADA')
+$script:Ignored = @('NAO_CONCLUIDO', 'SEM_CPF_PLANILHA', 'ACAO_NAO_SUPORTADA', 'LINHA_REPETIDA', 'AGUARDANDO', 'DESATIVACAO_DESLIGADA', 'SEM_NOVO_LOGIN', 'ACAO_NA_PLANILHA')
 $script:Ready = @('SIMULADO_PREENCHER', 'SIMULADO_DESATIVAR')
-$script:Confirmed = @('ATUALIZADO', 'CPF_JA_CONFERE', 'DESATIVADO', 'JA_DESATIVADO')
+$script:Confirmed = @('ATUALIZADO', 'CPF_JA_CONFERE', 'DESATIVADO', 'JA_DESATIVADO', 'JA_COM_NOVO_LOGIN')
 
 function Update-UiButtons {
     $idle = -not $script:State.Busy
     foreach ($name in @('BrowseButton', 'SaveConfigButton', 'EncodingBox', 'AttributeBox', 'DomainsGrid', 'DisableUsersBox')) { $script:Ui[$name].IsEnabled = $idle }
     $script:Ui.SimulateButton.IsEnabled = $idle -and [bool]$script:State.Csv
+    $script:Ui.VerifyLoginsButton.IsEnabled = $idle -and [bool]$script:State.Csv
     $pending = @($script:State.Results | Where-Object { $_.Status -in $script:Ready }).Count
     $cpfCount = @($script:State.Results | Where-Object { $_.Status -eq 'SIMULADO_PREENCHER' }).Count
     $disableCount = @($script:State.Results | Where-Object { $_.Status -eq 'SIMULADO_DESATIVAR' }).Count
@@ -49,7 +53,11 @@ function Update-UiButtons {
         $script:Ui.ApplyButton.ToolTip = 'Faça uma nova simulação antes de aplicar.'
         $script:Ui.PendingCount.ToolTip = 'Resultados desatualizados. Faça uma nova simulação.'
     }
-    $script:Ui.ApplyButton.IsEnabled = $idle -and [bool]$script:State.Fingerprint -and $pending -gt 0
+    if ($script:State.Mode -eq 'Logins') {
+        $script:Ui.ApplyButton.ToolTip = 'Verificação de logins é somente consulta. Use Simular no AD para preparar ações de CPF/desativação.'
+        $script:Ui.PendingCount.ToolTip = 'Contas identificadas pelo nome que ainda usam outro login.'
+    }
+    $script:Ui.ApplyButton.IsEnabled = $idle -and $script:State.Mode -ne 'Logins' -and [bool]$script:State.Fingerprint -and $pending -gt 0
     $script:Ui.OpenReportButton.IsEnabled = $idle -and [bool]$script:State.Report -and (Test-Path -LiteralPath $script:State.Report)
     if ($idle) { $script:Ui.BusyBar.Visibility = 'Collapsed' } else { $script:Ui.BusyBar.Visibility = 'Visible' }
 }
@@ -64,6 +72,8 @@ function Set-UiResultsStale([string]$Message) {
         foreach ($item in $script:State.ResultView.SourceCollection) {
             if ($item.Status -in $script:Ready) {
                 $item.Status = 'SIMULACAO_DESATUALIZADA'; $item.Situacao = 'Simule novamente'; $item.Revisar = $true
+            } elseif ($script:State.Mode -eq 'Logins' -and $item.Status -in @('JA_COM_NOVO_LOGIN','NOVO_LOGIN_PENDENTE')) {
+                $item.Status = 'CONSULTA_DESATUALIZADA'; $item.Situacao = 'Verifique novamente'; $item.Revisar = $true
             }
         }
         Update-UiView
@@ -85,7 +95,7 @@ function Test-UiSourceChanged([switch]$Force) {
         $file = Get-Item -LiteralPath $script:State.Csv -ErrorAction Stop
         $stamp = '{0}:{1}' -f $file.LastWriteTimeUtc.Ticks, $file.Length
         if (-not $Force -and $stamp -eq $script:State.SourceStamp) { return }
-        $current = Get-UiFingerprint ([IO.File]::ReadAllBytes($script:State.Csv)) (Get-UiConfigJson) ([string]$script:Ui.EncodingBox.SelectedItem.Tag)
+        $current = Get-UiFingerprint ([IO.File]::ReadAllBytes($script:State.Csv)) (Get-UiConfigJson -ForLogins:($script:State.Mode -eq 'Logins')) ([string]$script:Ui.EncodingBox.SelectedItem.Tag)
         $script:State.SourceStamp = $stamp
         if ($current -cne $script:State.Fingerprint) { Reset-UiSimulation 'O CSV foi alterado fora do sistema. Os resultados anteriores ficaram desatualizados; simule novamente.' }
     } catch {
@@ -106,11 +116,11 @@ function Get-UiErrorMessage($ErrorRecord) {
     return [string]$exception.Message
 }
 
-function Get-UiConfigJson {
+function Get-UiConfigJson([switch]$ForLogins) {
     $null = $script:Ui.DomainsGrid.CommitEdit([Windows.Controls.DataGridEditingUnit]::Cell, $true)
     $null = $script:Ui.DomainsGrid.CommitEdit([Windows.Controls.DataGridEditingUnit]::Row, $true)
     $attribute = $script:Ui.AttributeBox.Text.Trim()
-    if ($attribute -notmatch '^[a-zA-Z][a-zA-Z0-9-]*$') { throw 'Informe um nome válido para o atributo CPF.' }
+    if (-not $ForLogins -and $attribute -notmatch '^[a-zA-Z][a-zA-Z0-9-]*$') { throw 'Informe um nome válido para o atributo CPF.' }
     $domains = [ordered]@{}
     foreach ($item in $script:Domains) { $domains[$item.Dominio] = $item.Servidor.Trim() }
     return ([ordered]@{ AtributoCpf = $attribute; FormatoCpf = 'Numeros'; Dominios = $domains; DesativarUsuarios = [bool]$script:Ui.DisableUsersBox.IsChecked } | ConvertTo-Json -Depth 5 -Compress)
@@ -131,8 +141,10 @@ function Test-UiRowVisible($Item) {
     switch ($script:State.FilterStatus) {
         'Prontos' { return $Item.Status -in $script:Ready }
         'Conferidos' { return $Item.Status -in $script:Confirmed }
+        'LoginOk' { return $Item.Status -eq 'JA_COM_NOVO_LOGIN' }
+        'LoginPendente' { return $Item.Status -eq 'NOVO_LOGIN_PENDENTE' }
         'Revisar' { return [bool]$Item.Revisar }
-        'Ignorados' { return $Item.Status -in @('NAO_CONCLUIDO', 'SEM_CPF_PLANILHA', 'ACAO_NAO_SUPORTADA', 'LINHA_REPETIDA', 'DESATIVACAO_DESLIGADA') }
+        'Ignorados' { return $Item.Status -in @('NAO_CONCLUIDO', 'SEM_CPF_PLANILHA', 'ACAO_NAO_SUPORTADA', 'LINHA_REPETIDA', 'DESATIVACAO_DESLIGADA', 'SEM_NOVO_LOGIN', 'ACAO_NA_PLANILHA') }
     }
     return $true
 }
@@ -202,19 +214,46 @@ function Get-UiFingerprint([byte[]]$Bytes, [string]$Json, [string]$Encoding) {
     } finally { $hash.Dispose() }
 }
 
+function Update-UiMode {
+    $logins = $script:State.Mode -eq 'Logins'
+    $script:Ui.PendingTitle.Text = 'PRONTOS PARA APLICAR'; $script:Ui.OkTitle.Text = 'CONFERIDOS / APLICADOS'
+    $script:Ui.OperationTitle.Text = '3. Confira e aplique'
+    $script:Ui.OperationHint.Text = 'Ordene clicando nas colunas. O filtro altera somente a visualização.'
+    if ($logins) {
+        $script:Ui.PendingTitle.Text = 'NOVO LOGIN PENDENTE'; $script:Ui.OkTitle.Text = 'JÁ COM NOVO LOGIN'
+        $script:Ui.OperationTitle.Text = '3. Verificação de logins'
+        $script:Ui.OperationHint.Text = 'Somente consulta. Compare o login esperado com o atual no AD.'
+    }
+    foreach ($column in $script:Ui.ResultsGrid.Columns) {
+        if ($column.SortMemberPath -in @('CpfPlanilha','CpfAnterior','AcaoTexto')) {
+            $column.Visibility = 'Visible'; if ($logins) { $column.Visibility = 'Collapsed' }
+        }
+        if ($column.SortMemberPath -eq 'LoginEncontrado') {
+            $column.Header = 'Login encontrado'; if ($logins) { $column.Header = 'Login atual no AD' }
+            $column.Width = New-Object Windows.Controls.DataGridLength(130)
+            if ($logins) { $column.Width = New-Object Windows.Controls.DataGridLength(1.3, [Windows.Controls.DataGridLengthUnitType]::Star) }
+        }
+        if ($column.SortMemberPath -eq 'Login') {
+            $column.Header = 'Novo login / ação'; if ($logins) { $column.Header = 'Novo login esperado' }
+        }
+    }
+}
+
 function Set-UiResults([object[]]$Results, [switch]$Preview) {
     $script:State.Results = $Results
     $script:State.Preview = [bool]$Preview
     $script:State.ResultsStale = $false
     $script:Ui.StaleResultsBanner.Visibility = 'Collapsed'
+    Update-UiMode
     $display = foreach ($row in $Results) {
         $label = [string]$row.Status
         if ($script:StatusLabels.ContainsKey($label)) { $label = $script:StatusLabels[$label] }
-        $review = $row.Status -notin ($script:Ignored + $script:Ready + $script:Confirmed)
+        $review = $row.Status -notin ($script:Ignored + $script:Ready + $script:Confirmed + @('NOVO_LOGIN_PENDENTE'))
         $action = 'PREENCHER_CPF'
         if ($row.PSObject.Properties['Acao']) { $action = [string]$row.Acao }
         elseif ((ConvertTo-DomainKey $row.Login) -eq 'DESATIVAR') { $action = 'DESATIVAR' }
         $actionText = 'Preencher CPF'; if ($action -eq 'DESATIVAR') { $actionText = 'Desativar' }
+        if ($action -eq 'VERIFICAR_LOGIN') { $actionText = 'Verificar login' }
         $foundLogin = ''; if ($row.PSObject.Properties['LoginEncontrado']) { $foundLogin = [string]$row.LoginEncontrado }
         $previousEnabled = ''; $currentEnabled = ''
         if ($row.PSObject.Properties['ContaAtivaAnterior'] -and $row.ContaAtivaAnterior -is [bool]) {
@@ -267,7 +306,8 @@ function Set-UiResults([object[]]$Results, [switch]$Preview) {
     if ($Preview) {
         $script:Ui.PendingCount.Text = '—'; $script:Ui.OkCount.Text = '—'; $script:Ui.ReviewCount.Text = '—'
     } else {
-        $script:Ui.PendingCount.Text = [string]@($Results | Where-Object { $_.Status -in $script:Ready }).Count
+        $pendingStates = $script:Ready; if ($script:State.Mode -eq 'Logins') { $pendingStates = @('NOVO_LOGIN_PENDENTE') }
+        $script:Ui.PendingCount.Text = [string]@($Results | Where-Object { $_.Status -in $pendingStates }).Count
         $script:Ui.OkCount.Text = [string]@($Results | Where-Object { $_.Status -in $script:Confirmed }).Count
         $script:Ui.ReviewCount.Text = [string]@($display | Where-Object { $_.Revisar }).Count
     }
@@ -303,6 +343,7 @@ function Import-UiCsv([string]$Path) {
     # Um arquivo rejeitado nunca pode deixar o CSV anterior selecionado para execução.
     $script:State.Fingerprint = ''; $script:State.Csv = ''; $script:State.Rows = @(); $script:State.Report = ''
     $script:State.SourceStamp = ''; $script:State.LastError = ''
+    $script:State.Mode = 'Sincronizacao'
     Clear-UiFilters
     Set-UiResults @() -Preview
     $script:Ui.CsvPath.Text = 'Nenhum CSV carregado'
@@ -329,18 +370,19 @@ function Import-UiCsv([string]$Path) {
     $preview = @(Get-UiPreviewRows $rows)
     Set-UiResults @($preview) -Preview
     $script:Ui.StatusText.Text = "CSV carregado: $($rows.Count) usuários. Nenhuma consulta ao AD realizada."
-    $script:Ui.DetailsText.Text = 'O domínio de cada usuário vem da coluna DOMÍNIO. Clique em Simular no AD para localizar os servidores automaticamente.'
+    $script:Ui.DetailsText.Text = 'Clique em Verificar logins para conferir quem já usa o novo login. Simular no AD prepara as ações de CPF/desativação.'
     Update-UiButtons
 }
 
-function Start-UiOperation([bool]$Apply = $false) {
+function Start-UiOperation([bool]$Apply = $false, [switch]$CheckLogins) {
     if ($script:State.Busy) { return }
     $snapshot = ''
     $pipeline = $null
     try {
         $script:State.LastError = ''
         if (-not $script:State.Csv) { throw 'Selecione um CSV primeiro.' }
-        $json = Get-UiConfigJson
+        if ($Apply -and ($CheckLogins -or $script:State.Mode -eq 'Logins')) { throw 'A verificação de logins é somente consulta. Execute Simular no AD antes de aplicar ações.' }
+        $json = Get-UiConfigJson -ForLogins:$CheckLogins
         $encoding = [string]$script:Ui.EncodingBox.SelectedItem.Tag
         $bytes = [IO.File]::ReadAllBytes($script:State.Csv)
         $fingerprint = Get-UiFingerprint $bytes $json $encoding
@@ -353,16 +395,20 @@ function Start-UiOperation([bool]$Apply = $false) {
         [IO.File]::WriteAllBytes($snapshot, $bytes)
         $null = New-Item -ItemType Directory -Path $script:State.ReportFolder -Force
         $mode = 'simulacao'; if ($Apply) { $mode = 'aplicacao' }
+        if ($CheckLogins) { $mode = 'logins' }
         $report = Join-Path $script:State.ReportFolder ('cpf-ad-{0}-{1}-{2}.csv' -f $mode, (Get-Date -Format 'yyyyMMdd-HHmmss'), ([guid]::NewGuid().ToString('N').Substring(0, 8)))
         $pipeline = [powershell]::Create()
         $planJson = ''; if ($Apply) { $planJson = ConvertTo-Json -InputObject @($script:State.Results) -Depth 5 -Compress }
-        $null = $pipeline.AddCommand($script:State.WorkerPath).AddParameters(@{ Csv = $snapshot; ConfigJson = $json; ReportPath = $report; Codificacao = $encoding; Aplicar = $Apply; PlanoJson = $planJson })
+        $parameters = @{ Csv = $snapshot; ConfigJson = $json; ReportPath = $report; Codificacao = $encoding; Aplicar = $Apply; PlanoJson = $planJson }
+        if ($CheckLogins) { $parameters.VerificarLogins = $true }
+        $null = $pipeline.AddCommand($script:State.WorkerPath).AddParameters($parameters)
         $script:State.Fingerprint = ''
         Set-UiResultsStale 'Operação em andamento. A tabela ainda mostra os resultados da execução anterior.'
-        $script:State.Job = @{ Pipeline = $pipeline; Handle = $pipeline.BeginInvoke(); Snapshot = $snapshot; Fingerprint = $fingerprint; Apply = $Apply; Report = $report }
+        $script:State.Job = @{ Pipeline = $pipeline; Handle = $pipeline.BeginInvoke(); Snapshot = $snapshot; Fingerprint = $fingerprint; Apply = $Apply; Report = $report; CheckLogins = [bool]$CheckLogins }
         $script:State.Busy = $true
         $script:Ui.StatusText.Text = 'Consultando o AD e preparando o relatório. Aguarde...'
         if ($Apply) { $script:Ui.StatusText.Text = 'Aplicando as ações simuladas e confirmando cada alteração no AD. Aguarde...' }
+        if ($CheckLogins) { $script:Ui.StatusText.Text = 'Verificando novos logins em todas as linhas, somente no domínio indicado. Nenhuma conta será alterada.' }
         Update-UiButtons
     } catch {
         if ($pipeline) { $pipeline.Dispose() }
@@ -381,12 +427,15 @@ function Complete-UiOperation {
         $output = @($job.Pipeline.EndInvoke($job.Handle))
         if ($job.Pipeline.HadErrors) { throw [string]$job.Pipeline.Streams.Error[0] }
         if ($output.Count -ne 1 -or -not $output[0].PSObject.Properties['Results']) { throw 'A execução não retornou um resultado válido. Consulte o relatório, se disponível.' }
+        $nextMode = 'Sincronizacao'; if ($job.CheckLogins) { $nextMode = 'Logins' }
+        if ($script:State.Mode -ne $nextMode) { Clear-UiFilters }
+        $script:State.Mode = $nextMode
         Set-UiResults @($output[0].Results)
         $script:State.Report = $job.Report
         if ($job.Apply) {
             $script:Ui.StatusText.Text = 'Aplicação concluída. Confira as situações e o relatório de cada usuário.'
         } else {
-            $current = Get-UiFingerprint ([IO.File]::ReadAllBytes($script:State.Csv)) (Get-UiConfigJson) ([string]$script:Ui.EncodingBox.SelectedItem.Tag)
+            $current = Get-UiFingerprint ([IO.File]::ReadAllBytes($script:State.Csv)) (Get-UiConfigJson -ForLogins:$job.CheckLogins) ([string]$script:Ui.EncodingBox.SelectedItem.Tag)
             if ($current -ceq $job.Fingerprint) {
                 $script:State.Fingerprint = $job.Fingerprint
                 $file = Get-Item -LiteralPath $script:State.Csv -ErrorAction Stop
@@ -394,8 +443,13 @@ function Complete-UiOperation {
                 $cpfCount = @($script:State.Results | Where-Object { $_.Status -eq 'SIMULADO_PREENCHER' }).Count
                 $disableCount = @($script:State.Results | Where-Object { $_.Status -eq 'SIMULADO_DESATIVAR' }).Count
                 $script:Ui.StatusText.Text = "Simulação: $cpfCount CPF(s) para preencher; $disableCount conta(s) para desativar. Nenhuma alteração no AD."
+                if ($job.CheckLogins) {
+                    $okCount = @($script:State.Results | Where-Object { $_.Status -eq 'JA_COM_NOVO_LOGIN' }).Count
+                    $pendingCount = @($script:State.Results | Where-Object { $_.Status -eq 'NOVO_LOGIN_PENDENTE' }).Count
+                    $script:Ui.StatusText.Text = "Logins: $okCount já estão com o novo login; $pendingCount ainda usam outro login. Nenhuma conta alterada."
+                }
             } else {
-                $script:Ui.StatusText.Text = 'O arquivo mudou durante a simulação. Os resultados são da cópia anterior; simule novamente.'
+                $script:Ui.StatusText.Text = 'O arquivo mudou durante a consulta. Os resultados são da cópia anterior; execute novamente.'
                 Set-UiResultsStale $script:Ui.StatusText.Text
             }
         }
@@ -422,7 +476,7 @@ try {
     $script:Window.MinHeight = [Math]::Min(620, $workArea.Height)
     $script:Window.Width = [Math]::Min(1280, $workArea.Width)
     $script:Window.Height = [Math]::Min(900, $workArea.Height)
-    foreach ($name in @('SessionLabel','CsvPath','EncodingBox','BrowseButton','DisableUsersBox','ConfigExpander','DomainsGrid','AttributeBox','SaveConfigButton','TotalCount','PendingCount','OkCount','ReviewCount','OpenReportButton','SimulateButton','ApplyButton','ResultsGrid','DetailsText','BusyBar','StatusText','SetupScroll','SummaryCards','SearchBox','DomainFilter','StatusFilter','SortBox','SortDirectionButton','ClearFiltersButton','VisibleCountText','EmptyResultsText','StaleResultsBanner','StaleResultsText')) { $script:Ui[$name] = $script:Window.FindName($name) }
+    foreach ($name in @('SessionLabel','CsvPath','EncodingBox','BrowseButton','DisableUsersBox','ConfigExpander','DomainsGrid','AttributeBox','SaveConfigButton','TotalCount','PendingCount','OkCount','ReviewCount','PendingTitle','OkTitle','OperationTitle','OperationHint','OpenReportButton','SimulateButton','VerifyLoginsButton','ApplyButton','ResultsGrid','DetailsText','BusyBar','StatusText','SetupScroll','SummaryCards','SearchBox','DomainFilter','StatusFilter','SortBox','SortDirectionButton','ClearFiltersButton','VisibleCountText','EmptyResultsText','StaleResultsBanner','StaleResultsText')) { $script:Ui[$name] = $script:Window.FindName($name) }
     # A desativação exige habilitação em cada abertura, mesmo com configuração salva.
     $script:Ui.DisableUsersBox.IsChecked = $false
     $script:Ui.SessionLabel.Text = [Security.Principal.WindowsIdentity]::GetCurrent().Name
@@ -496,6 +550,7 @@ try {
         } catch { Show-UiError (Get-UiErrorMessage $_) }
     })
     $script:Ui.SimulateButton.Add_Click({ Start-UiOperation })
+    $script:Ui.VerifyLoginsButton.Add_Click({ Start-UiOperation -CheckLogins })
     $script:Ui.ApplyButton.Add_Click({ Start-UiOperation -Apply $true })
     $script:Ui.OpenReportButton.Add_Click({
         try { Invoke-Item -LiteralPath $script:State.Report -ErrorAction Stop } catch { Show-UiError (Get-UiErrorMessage $_) }

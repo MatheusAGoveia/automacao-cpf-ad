@@ -15,6 +15,19 @@ Dê dois cliques em **`Abrir-Interface.cmd`**. A janela utiliza os componentes d
 5. Clique em **Aplicar todos (N)** para executar as N ações prontas na simulação: preencher CPF ou desativar conta. A mensagem de conclusão da simulação e a dica do botão separam os totais por ação. Os filtros alteram somente a visualização. O botão só fica disponível depois de uma simulação válida; as contas e seus estados são conferidos novamente antes de alterar o AD.
 6. Clique em **Abrir relatório** para abrir o CSV com todos os resultados.
 
+### Conferir quem já está com o novo login
+
+Depois de selecionar o CSV, clique em **Verificar logins**. Essa consulta verifica todas as linhas com login informado, mesmo sem CPF ou com CONCLUÍDO desmarcado. Cada conta é procurada somente no domínio da linha, sem exigir o atributo CPF.
+
+A tabela passa a mostrar **Novo login esperado**, **Login atual no AD** e **Situação**. Os contadores e os filtros **Já com novo login** e **Novo login pendente** separam os resultados:
+
+- **Já com novo login**: o login esperado existe e o nome completo confere.
+- **Novo login pendente**: o login esperado não existe, mas há uma conta com nome completo único e outro login no domínio indicado.
+- **Para revisar**: nome divergente, homônimos, usuário não localizado ou erro de consulta. Esses casos não são presumidos pendentes.
+- **Sem novo login informado**: a célula NOVO LOGIN está vazia. **Ação indicada na planilha**: contém desativar, excluir ou remover, que não são executados nesta consulta.
+
+**Verificar logins** é somente consulta: não renomeia nem desativa contas e não altera CPF. O botão **Aplicar todos** fica bloqueado, e qualquer simulação anterior deixa de autorizar alterações. Para preencher CPF ou desativar contas depois, clique novamente em **Simular no AD**. O relatório de logins fica disponível em **Abrir relatório**.
+
 A tabela mantém espaço reservado mesmo em janelas menores. As configurações começam recolhidas e a área superior tem sua própria rolagem quando necessário, para não esconder os usuários.
 
 **Todos os domínios** retira apenas a restrição por domínio; busca e situação continuam valendo. O rodapé informa quantos filtros estão ativos. Se a tabela ficar vazia, a mensagem central mostra esses filtros. Clique em **Limpar** para voltar a todos os registros.
@@ -156,6 +169,8 @@ powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\tests\Testar-Pla
 pwsh.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\tests\Testar-Plano.ps1
 powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\tests\Testar-Desativacao.ps1
 pwsh.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\tests\Testar-Desativacao.ps1
+powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\tests\Testar-Logins.ps1
+pwsh.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\tests\Testar-Logins.ps1
 powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -STA -File .\tests\Testar-Interface.ps1
 pwsh.exe -NoProfile -ExecutionPolicy RemoteSigned -STA -File .\tests\Testar-Interface.ps1
 ```

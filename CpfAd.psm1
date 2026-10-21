@@ -365,4 +365,84 @@ function Invoke-CpfSync {
     return $results.ToArray() | Select-Object Registro, Nome, Dominio, Login, Acao, ConcluidoPlanilha, LoginEncontrado, ContaAtivaAnterior, ContaAtivaAtual, Servidor, OrigemServidor, ObjectGuid, CpfPlanilha, CpfAnterior, Status, Detalhe
 }
 
-Export-ModuleMember -Function Import-CpfCsv, Invoke-CpfSync, Get-AdAdapter, Test-Cpf, ConvertTo-LdapValue, ConvertTo-DomainKey
+function Invoke-AdLoginCheck {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Rows,
+        [Parameter(Mandatory)]$Config,
+        [Parameter(Mandatory)][hashtable]$Adapter,
+        [Parameter(Mandatory)][string]$ReportPath
+    )
+    $domainMap = @{}
+    foreach ($property in $Config.Dominios.PSObject.Properties) { $domainMap[(ConvertTo-Key $property.Name)] = ([string]$property.Value).Trim() }
+    $servers = @{}; $errors = @{}
+    $results = @(foreach ($row in $Rows) {
+        $result = [pscustomobject]@{
+            Registro = $row.Registro; Nome = $row.Nome; Dominio = $row.Dominio; Login = $row.Login
+            Acao = 'VERIFICAR_LOGIN'; ConcluidoPlanilha = $row.Concluido; LoginEncontrado = ''; ContaAtivaAnterior = ''; ContaAtivaAtual = ''
+            Servidor = ''; OrigemServidor = ''; ObjectGuid = ''; CpfPlanilha = ''; CpfAnterior = ''; Status = ''; Detalhe = ''
+        }
+        $login = ([string]$row.Login).Trim()
+        if (-not $login) {
+            $result.Status = 'SEM_NOVO_LOGIN'; $result.Detalhe = 'NOVO LOGIN está vazio na planilha; não há login esperado para comparar.'
+        } elseif ((ConvertTo-Key $login) -in @('DESATIVAR','EXCLUIR','REMOVER')) {
+            $result.Status = 'ACAO_NA_PLANILHA'; $result.Detalhe = 'NOVO LOGIN contém uma ação. A verificação de logins não executa desativação, exclusão ou remoção.'
+        } elseif ([string]::IsNullOrWhiteSpace($row.Nome)) {
+            $result.Status = 'SEM_NOME'; $result.Detalhe = 'Informe o nome completo para conferir a identidade da conta.'
+        } elseif ([string]::IsNullOrWhiteSpace($row.Dominio)) {
+            $result.Status = 'SEM_DOMINIO'; $result.Detalhe = 'Informe o domínio da conta na coluna DOMÍNIO.'
+        } else {
+            try {
+                $domain = ConvertTo-Key $row.Dominio
+                $manual = ''; if ($domainMap.ContainsKey($domain)) { $manual = $domainMap[$domain] }
+                $result.OrigemServidor = 'Automatico'; if ($manual) { $result.OrigemServidor = 'Manual' }
+                if ($errors.ContainsKey($domain)) { throw $errors[$domain] }
+                if (-not $servers.ContainsKey($domain)) {
+                    try {
+                        $server = $manual
+                        if (-not $server) {
+                            $server = & $Adapter.DiscoverServer $domain
+                            if ([string]::IsNullOrWhiteSpace($server)) { throw 'Nenhum controlador localizado para o domínio informado.' }
+                        }
+                        # Sem atributo CPF: esta consulta depende apenas da identidade e do domínio.
+                        $fixed = & $Adapter.ValidateServer $server '' $domain
+                        if ([string]::IsNullOrWhiteSpace($fixed)) { throw 'O servidor não confirmou o controlador de domínio.' }
+                        $servers[$domain] = [string]$fixed
+                    } catch { $errors[$domain] = $_.Exception.Message; throw }
+                }
+                $result.Servidor = $servers[$domain]
+                $users = @(& $Adapter.Find $result.Servidor '' $login $row.Nome)
+                $byName = $false
+                if ($users.Count -eq 0) {
+                    $byName = $true
+                    $users = @(& $Adapter.Find $result.Servidor '' '' $row.Nome)
+                }
+                if ($users.Count -eq 0) {
+                    $result.Status = 'USUARIO_NAO_ENCONTRADO'; $result.Detalhe = 'O login esperado e o nome completo não foram encontrados no domínio indicado. Revise os dados; não foi possível confirmar a situação.'
+                } elseif ($users.Count -gt 1) {
+                    $result.Status = 'USUARIO_AMBIGUO'; $result.Detalhe = 'Mais de uma conta corresponde à busca neste domínio. Não foi possível confirmar o login atual.'
+                } else {
+                    $user = $users[0]
+                    $result.LoginEncontrado = [string]$user.SamAccountName
+                    $result.ObjectGuid = ([guid]$user.ObjectGUID).ToString()
+                    if (-not (Test-UserName $user $row.Nome)) {
+                        $result.Status = 'NOME_DIVERGENTE'; $result.Detalhe = 'O login encontrado pertence a um cadastro cujo nome não confere com a planilha. Revise a identidade.'
+                    } elseif ([string]::IsNullOrWhiteSpace($result.LoginEncontrado)) {
+                        throw 'O AD não retornou o login atual da conta.'
+                    } elseif ($result.LoginEncontrado -ieq $login) {
+                        $result.Status = 'JA_COM_NOVO_LOGIN'; $result.Detalhe = 'O nome completo confere e a conta já utiliza o NOVO LOGIN no domínio indicado.'
+                    } elseif ($byName) {
+                        $result.Status = 'NOVO_LOGIN_PENDENTE'; $result.Detalhe = 'Nome completo único encontrado com outro login no domínio indicado. A alteração do login ainda está pendente.'
+                    } else {
+                        $result.Status = 'LOGIN_DIVERGENTE'; $result.Detalhe = 'O AD retornou um login diferente da busca. Não foi possível confirmar a situação.'
+                    }
+                }
+            } catch { $result.Status = 'ERRO_CONSULTA'; $result.Detalhe = $_.Exception.Message }
+        }
+        $result
+    })
+    Save-CpfReport $results $ReportPath
+    return $results
+}
+
+Export-ModuleMember -Function Import-CpfCsv, Invoke-CpfSync, Invoke-AdLoginCheck, Get-AdAdapter, Test-Cpf, ConvertTo-LdapValue, ConvertTo-DomainKey

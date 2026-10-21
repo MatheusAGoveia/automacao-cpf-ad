@@ -6,19 +6,27 @@ param(
     [Parameter(Mandatory)][string]$ReportPath,
     [string]$Codificacao = 'utf-8',
     [bool]$Aplicar = $false,
-    [string]$PlanoJson = ''
+    [string]$PlanoJson = '',
+    [bool]$VerificarLogins = $false
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'CpfAd.psm1') -Force
 $config = $ConfigJson | ConvertFrom-Json
+$rows = @(Import-CpfCsv -Path $Csv -Encoding $Codificacao)
+if ($rows.Count -eq 0) { throw 'O CSV não contém registros de usuários.' }
+if ($VerificarLogins) {
+    if ($Aplicar) { throw 'A verificação de logins é somente consulta e não pode ser aplicada.' }
+    $adapter = Get-AdAdapter
+    $results = @(Invoke-AdLoginCheck -Rows $rows -Config $config -Adapter $adapter -ReportPath $ReportPath)
+    [pscustomobject]@{ Results = $results; Report = $ReportPath }
+    return
+}
 $allowDisable = $false
 if ($config.PSObject.Properties.Name -contains 'DesativarUsuarios') {
     if ($config.DesativarUsuarios -isnot [bool]) { throw 'DesativarUsuarios deve ser true ou false na configuração.' }
     $allowDisable = $config.DesativarUsuarios
 }
-$rows = @(Import-CpfCsv -Path $Csv -Encoding $Codificacao)
-if ($rows.Count -eq 0) { throw 'O CSV não contém registros de usuários.' }
 $options = @{}
 $plan = @()
 if ($Aplicar) {

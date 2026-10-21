@@ -128,7 +128,7 @@ Pessoa Exemplo E,BETIM.PMB,pessoa.e,000.000.003-53,TRUE
     $Ui.DomainsGrid.Items.Refresh()
 
     $fakeWorker = @'
-param($Csv, $ConfigJson, $ReportPath, $Codificacao, [bool]$Aplicar, $PlanoJson)
+param($Csv, $ConfigJson, $ReportPath, $Codificacao, [bool]$Aplicar, $PlanoJson, [bool]$VerificarLogins = $false)
 $ErrorActionPreference = 'Stop'
 Import-Module '__CORE__' -Force
 $rows = @(Import-CpfCsv -Path $Csv -Encoding $Codificacao)
@@ -140,6 +140,7 @@ foreach ($row in $rows) {
     $cpf = ''; if ($row.Login -eq 'pessoa.b' -and -not $Aplicar) { $cpf = $row.Cpf }
     $identity = [guid]('00000000-0000-0000-0000-{0:D12}' -f $index)
     $login = $row.Login; if ($login.Trim() -ieq 'desativar') { $login = 'pessoa.desativar.' + $index }
+    if ($VerificarLogins -and $login -eq 'pessoa.nova') { $login = 'pessoa.antiga' }
     $enabled = $name -ne 'Pessoa Já Desativada'
     $global:CpfAdUiDirectory[[string]$index] = [pscustomobject]@{ Domain = (ConvertTo-DomainKey $row.Dominio); Name = $name; DisplayName = $name; SamAccountName = $login; ObjectGUID = $identity; CPF = $cpf; Enabled = $enabled }
 }
@@ -176,7 +177,7 @@ New-Module -Name ActiveDirectory -ScriptBlock {
     Export-ModuleMember -Function Get-ADRootDSE,Get-ADObject,Get-ADUser,Set-ADUser,Get-ADDomainController,Disable-ADAccount
 } | Import-Module -Global -Force
 Start-Sleep -Milliseconds 150
-& '__WORKER__' -Csv $Csv -ConfigJson $ConfigJson -ReportPath $ReportPath -Codificacao $Codificacao -Aplicar $Aplicar -PlanoJson $PlanoJson
+& '__WORKER__' -Csv $Csv -ConfigJson $ConfigJson -ReportPath $ReportPath -Codificacao $Codificacao -Aplicar $Aplicar -PlanoJson $PlanoJson -VerificarLogins $VerificarLogins
 '@
     $fakeWorker = $fakeWorker.Replace('__CORE__', (Join-Path $root 'CpfAd.psm1').Replace("'", "''"))
     $fakeWorker = $fakeWorker.Replace('__WORKER__', (Join-Path $root 'Executar-CpfAD.ps1').Replace("'", "''"))
@@ -311,6 +312,59 @@ Pessoa Já Desativada,SAÚDE.BETIM, desativar ,,FALSE
     Assert-Ui (@($State.Results | Where-Object { $_.Login -eq 'pessoa.saude' -and $_.Status -eq 'NAO_CONCLUIDO' }).Count -eq 1) 'Pessoa homônima no outro domínio segue fora da aplicação'
     $mixedReport = @(Import-Csv -LiteralPath $State.Report -Delimiter ';' -Encoding UTF8)
     Assert-Ui ($mixedReport.Count -eq 4 -and @($mixedReport | Where-Object { $_.Acao -eq 'DESATIVAR' -and $_.Status -eq 'DESATIVADO' }).Count -eq 1) 'Relatório misto preserva as quatro linhas, ação e estado confirmado'
+    $loginCsv = Join-Path $temp 'usuarios-logins.csv'
+    $loginText = @'
+NOME COMPLETO,DOMINIO,NOVO LOGIN,CPF,CONCLUÍDO
+Pessoa Exemplo A,BETIM.PMB,pessoa.a,,FALSE
+Pessoa Alterar,SAÚDE.BETIM,pessoa.nova,invalido,FALSE
+Pessoa Ação,BETIM.PMB,desativar,,FALSE
+Pessoa Sem Login,BETIM.PMB,,,FALSE
+Pessoa Exemplo E,BETIM.PMB,pessoa.e,,FALSE
+'@
+    [IO.File]::WriteAllText($loginCsv,$loginText,(New-Object Text.UTF8Encoding($true)))
+    Import-UiCsv $loginCsv
+    Assert-Ui ($Ui.VerifyLoginsButton.IsEnabled) 'Verificar logins fica disponível com o CSV carregado'
+    Start-UiOperation
+    Wait-UiJob
+    Assert-Ui ($Ui.ApplyButton.IsEnabled) 'Simulação de ações ainda prepara a desativação antes da consulta de logins'
+    $Ui.VerifyLoginsButton.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
+    Assert-Ui ($State.Busy -and -not $State.Fingerprint -and -not $Ui.VerifyLoginsButton.IsEnabled -and -not $Ui.ApplyButton.IsEnabled) 'Verificar logins invalida plano anterior e bloqueia botões enquanto consulta'
+    Wait-UiJob
+    Assert-Ui (-not $State.LastError -and $State.Mode -eq 'Logins') "Verificação de logins percorre UI, worker e AD falso ($($State.LastError))"
+    Assert-Ui ($Ui.OkCount.Text -eq '1' -and $Ui.PendingCount.Text -eq '1' -and $Ui.ReviewCount.Text -eq '1') 'Contadores de logins separam feitos, pendentes e revisão'
+    Assert-Ui ($Ui.PendingTitle.Text -eq 'NOVO LOGIN PENDENTE' -and $Ui.OkTitle.Text -eq 'JÁ COM NOVO LOGIN') 'Legendas deixam claro que os contadores tratam de logins'
+    Assert-Ui (-not $Ui.ApplyButton.IsEnabled -and $Ui.ApplyButton.Content -eq 'Aplicar todos (0)') 'Consulta não autoriza escrita mesmo quando há login pendente'
+    $loginPending = @($State.ResultView.SourceCollection | Where-Object { $_.Status -eq 'NOVO_LOGIN_PENDENTE' })[0]
+    Assert-Ui ($loginPending.Login -eq 'pessoa.nova' -and $loginPending.LoginEncontrado -eq 'pessoa.antiga' -and $loginPending.Dominio -eq 'SAÚDE.BETIM') 'Tabela compara login esperado e atual no domínio correto sem depender do CPF ou CONCLUÍDO'
+    Assert-Ui (@($State.Results | Where-Object { $_.Status -eq 'ACAO_NA_PLANILHA' }).Count -eq 1 -and @($State.Results | Where-Object { $_.Status -eq 'SEM_NOVO_LOGIN' }).Count -eq 1) 'Consulta separa células vazias e ações sem executá-las'
+    Assert-Ui (@($Ui.ResultsGrid.Columns | Where-Object { $_.SortMemberPath -in @('CpfPlanilha','CpfAnterior','AcaoTexto') -and $_.Visibility -eq 'Collapsed' }).Count -eq 3) 'Verificação destaca logins ocultando colunas de CPF e ação'
+    $Ui.StatusFilter.SelectedIndex = 5
+    Assert-Ui ($Ui.ResultsGrid.Items.Count -eq 1 -and $Ui.ResultsGrid.Items[0].Status -eq 'JA_COM_NOVO_LOGIN') 'Filtro Já com novo login mostra os feitos'
+    $Ui.StatusFilter.SelectedIndex = 6
+    Assert-Ui ($Ui.ResultsGrid.Items.Count -eq 1 -and $Ui.ResultsGrid.Items[0].LoginEncontrado -eq 'pessoa.antiga') 'Filtro Novo login pendente mostra somente os pendentes'
+    Clear-UiFilters
+    $Ui.SearchBox.Text = 'pessoa.antiga'
+    Assert-Ui ($Ui.ResultsGrid.Items.Count -eq 1) 'Busca encontra o login atual além do esperado'
+    Clear-UiFilters
+    $Ui.ResultsGrid.SelectedItem = $loginPending
+    Assert-Ui ($Ui.DetailsText.Text -like '*pendente*' -and $Ui.DetailsText.Text -like '*pessoa.antiga*') 'Detalhes explicam a pendência sem prometer renomeação'
+    $loginReport = @(Import-Csv -LiteralPath $State.Report -Delimiter ';' -Encoding UTF8)
+    Assert-Ui ($loginReport.Count -eq 5 -and @($loginReport | Where-Object { $_.Acao -eq 'VERIFICAR_LOGIN' }).Count -eq 5) 'Relatório de logins inclui todas as linhas e identifica a consulta'
+    Start-UiOperation -Apply $true
+    Assert-Ui (-not $State.Busy -and $State.LastError -like '*somente consulta*') 'Guarda interna rejeita aplicar os resultados da verificação'
+    $Ui.AttributeBox.Text = ''
+    Start-UiOperation -CheckLogins
+    Wait-UiJob
+    Assert-Ui (-not $State.LastError -and $State.Mode -eq 'Logins' -and $Ui.PendingCount.Text -eq '1') 'Consulta de logins independe da configuração do atributo CPF'
+    [IO.File]::WriteAllText($loginCsv,$loginText + "`r`n",(New-Object Text.UTF8Encoding($true)))
+    Test-UiSourceChanged -Force
+    Assert-Ui ($State.ResultsStale -and -not $State.Fingerprint -and $Ui.StaleResultsBanner.Visibility -eq 'Visible') 'CSV alterado invalida também a consulta de logins'
+    $Ui.AttributeBox.Text = 'CPF'
+    Start-UiOperation
+    Wait-UiJob
+    Assert-Ui ($State.Mode -eq 'Sincronizacao' -and $Ui.ApplyButton.IsEnabled -and @($Ui.ResultsGrid.Columns | Where-Object { $_.SortMemberPath -eq 'CpfPlanilha' -and $_.Visibility -eq 'Visible' }).Count -eq 1) 'Nova simulação restaura colunas e regras de aplicação de CPF/desativação'
+    Start-UiOperation -CheckLogins
+    Wait-UiJob
     Clear-UiFilters
     $Ui.SessionLabel.Text = 'PRÉVIA DE TESTE · DADOS FICTÍCIOS'
     if ($Imagem) {

@@ -77,17 +77,18 @@
       </Border>
       <UniformGrid x:Name="SummaryCards" Grid.Row="2" Columns="4" Margin="0,10,0,0">
         <Border Background="White" CornerRadius="7" Padding="15,10" Margin="0,0,9,0"><StackPanel><TextBlock Text="USUÁRIOS NO CSV" FontSize="10" Foreground="#64748B" FontWeight="SemiBold"/><TextBlock x:Name="TotalCount" Text="0" FontSize="27" FontWeight="SemiBold" Foreground="#20344F"/></StackPanel></Border>
-        <Border Background="#EAF2FF" CornerRadius="7" Padding="15,10" Margin="0,0,9,0"><StackPanel><TextBlock Text="PRONTOS PARA APLICAR" FontSize="10" Foreground="#3768AA" FontWeight="SemiBold"/><TextBlock x:Name="PendingCount" Text="—" FontSize="27" FontWeight="SemiBold" Foreground="#205FC3"/></StackPanel></Border>
-        <Border Background="#EAF6F0" CornerRadius="7" Padding="15,10" Margin="0,0,9,0"><StackPanel><TextBlock Text="CONFERIDOS / APLICADOS" FontSize="10" Foreground="#327457" FontWeight="SemiBold"/><TextBlock x:Name="OkCount" Text="—" FontSize="27" FontWeight="SemiBold" Foreground="#23754F"/></StackPanel></Border>
+        <Border Background="#EAF2FF" CornerRadius="7" Padding="15,10" Margin="0,0,9,0"><StackPanel><TextBlock x:Name="PendingTitle" Text="PRONTOS PARA APLICAR" FontSize="10" Foreground="#3768AA" FontWeight="SemiBold"/><TextBlock x:Name="PendingCount" Text="—" FontSize="27" FontWeight="SemiBold" Foreground="#205FC3"/></StackPanel></Border>
+        <Border Background="#EAF6F0" CornerRadius="7" Padding="15,10" Margin="0,0,9,0"><StackPanel><TextBlock x:Name="OkTitle" Text="CONFERIDOS / APLICADOS" FontSize="10" Foreground="#327457" FontWeight="SemiBold"/><TextBlock x:Name="OkCount" Text="—" FontSize="27" FontWeight="SemiBold" Foreground="#23754F"/></StackPanel></Border>
         <Border Background="#FFF4E5" CornerRadius="7" Padding="15,10"><StackPanel><TextBlock Text="PARA REVISAR" FontSize="10" Foreground="#916322" FontWeight="SemiBold"/><TextBlock x:Name="ReviewCount" Text="—" FontSize="27" FontWeight="SemiBold" Foreground="#A76B12"/></StackPanel></Border>
       </UniformGrid>
       </Grid>
       </ScrollViewer>
       <Grid Grid.Row="1" Margin="0,12,0,10">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <StackPanel VerticalAlignment="Center"><TextBlock Text="3. Confira e aplique" FontSize="17" FontWeight="SemiBold" Foreground="#27364C"/><TextBlock Text="Ordene clicando nas colunas. O filtro altera somente a visualização." FontSize="12" Foreground="#64748B" Margin="0,3,0,0"/></StackPanel>
+        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0"><TextBlock x:Name="OperationTitle" Text="3. Confira e aplique" FontSize="17" FontWeight="SemiBold" Foreground="#27364C"/><TextBlock x:Name="OperationHint" Text="Ordene clicando nas colunas. O filtro altera somente a visualização." FontSize="12" Foreground="#64748B" Margin="0,3,0,0" TextWrapping="Wrap"/></StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
           <Button x:Name="OpenReportButton" Content="Abrir relatório" IsEnabled="False" Margin="0,0,8,0"/>
+          <Button x:Name="VerifyLoginsButton" Content="Verificar logins" IsEnabled="False" Margin="0,0,8,0" ToolTip="Confere o novo login de todas as linhas, mesmo sem CPF ou CONCLUÍDO. Somente consulta; não altera contas."/>
           <Button x:Name="SimulateButton" Content="Simular no AD" IsEnabled="False" Background="#2363CA" Foreground="White" BorderBrush="#2363CA" Margin="0,0,8,0"/>
           <Button x:Name="ApplyButton" Content="Aplicar todos (0)" IsEnabled="False" Background="#18734C" Foreground="White" BorderBrush="#18734C"/>
         </StackPanel>
@@ -99,7 +100,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="154"/><ColumnDefinition Width="12"/><ColumnDefinition Width="160"/><ColumnDefinition Width="12"/><ColumnDefinition Width="140"/><ColumnDefinition Width="8"/><ColumnDefinition Width="52"/><ColumnDefinition Width="8"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
             <StackPanel><TextBlock Text="Buscar nome, login ou CPF" Style="{StaticResource Caption}"/><TextBox x:Name="SearchBox" ToolTip="Busca também sem acentos e sem pontuação do CPF"/></StackPanel>
             <StackPanel Grid.Column="2"><TextBlock Text="Domínio" Style="{StaticResource Caption}"/><ComboBox x:Name="DomainFilter" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="Todos os domínios remove apenas o filtro de domínio. Use Limpar para remover também Busca e Situação."/></StackPanel>
-            <StackPanel Grid.Column="4"><TextBlock Text="Situação" Style="{StaticResource Caption}"/><ComboBox x:Name="StatusFilter"><ComboBoxItem Content="Todas as situações" Tag="Todos"/><ComboBoxItem Content="Prontos para aplicar" Tag="Prontos"/><ComboBoxItem Content="Conferidos / aplicados" Tag="Conferidos"/><ComboBoxItem Content="Para revisar" Tag="Revisar"/><ComboBoxItem Content="Ignorados" Tag="Ignorados"/></ComboBox></StackPanel>
+            <StackPanel Grid.Column="4"><TextBlock Text="Situação" Style="{StaticResource Caption}"/><ComboBox x:Name="StatusFilter"><ComboBoxItem Content="Todas as situações" Tag="Todos"/><ComboBoxItem Content="Prontos para aplicar" Tag="Prontos"/><ComboBoxItem Content="Conferidos / aplicados" Tag="Conferidos"/><ComboBoxItem Content="Para revisar" Tag="Revisar"/><ComboBoxItem Content="Ignorados" Tag="Ignorados"/><ComboBoxItem Content="Já com novo login" Tag="LoginOk"/><ComboBoxItem Content="Novo login pendente" Tag="LoginPendente"/></ComboBox></StackPanel>
             <StackPanel Grid.Column="6"><TextBlock Text="Ordenar por" Style="{StaticResource Caption}"/><ComboBox x:Name="SortBox"><ComboBoxItem Content="Nome completo" Tag="Nome"/><ComboBoxItem Content="Login" Tag="Login"/><ComboBoxItem Content="Domínio" Tag="Dominio"/><ComboBoxItem Content="CPF no CSV" Tag="CpfPlanilha"/><ComboBoxItem Content="CPF no AD" Tag="CpfAnterior"/><ComboBoxItem Content="Situação" Tag="Situacao"/><ComboBoxItem Content="Ação" Tag="AcaoTexto"/><ComboBoxItem Content="Login encontrado" Tag="LoginEncontrado"/></ComboBox></StackPanel>
             <Button Grid.Column="8" x:Name="SortDirectionButton" Content="A–Z" Padding="5,7" VerticalAlignment="Bottom" ToolTip="Inverter ordem crescente / decrescente"/>
             <Button Grid.Column="10" x:Name="ClearFiltersButton" Content="Limpar" Padding="9,7" VerticalAlignment="Bottom"/>
@@ -127,6 +128,8 @@
                     <DataTrigger Binding="{Binding Status}" Value="CPF_JA_CONFERE"><Setter Property="Foreground" Value="#18734C"/></DataTrigger>
                     <DataTrigger Binding="{Binding Status}" Value="DESATIVADO"><Setter Property="Foreground" Value="#18734C"/></DataTrigger>
                     <DataTrigger Binding="{Binding Status}" Value="JA_DESATIVADO"><Setter Property="Foreground" Value="#18734C"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Status}" Value="JA_COM_NOVO_LOGIN"><Setter Property="Foreground" Value="#18734C"/></DataTrigger>
+                    <DataTrigger Binding="{Binding Status}" Value="NOVO_LOGIN_PENDENTE"><Setter Property="Foreground" Value="#A56913"/></DataTrigger>
                     <DataTrigger Binding="{Binding Revisar}" Value="True"><Setter Property="Foreground" Value="#A56913"/></DataTrigger>
                   </Style.Triggers>
                 </Style></DataGridTextColumn.ElementStyle>
